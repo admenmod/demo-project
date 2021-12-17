@@ -130,7 +130,7 @@
 			this._api = new EventEmitter();
 			this._api.preload = (...proms) => this.proms = this.proms.concat(proms);
 			
-			this._api.init = this._api.load = this._api.exit = this._api.updata = null;
+			this._api.init = this._api.load = this._api.exit = this._api.update = null;
 			
 			setGetter(this._api, 'name', () => this.name);
 			setGetter(this._api, 'isLoaded', () => this.isLoaded);
@@ -175,9 +175,9 @@
 			this._api.emit('exit');
 		}
 		
-		updata(dt) {
-			this._api.updata?.(dt);
-			this._api.emit('updata', dt);
+		update(dt) {
+			this._api.update?.(dt);
+			this._api.emit('update', dt);
 		}
 		
 		remove() {
@@ -192,12 +192,12 @@
 			if(~l) Scene.active_scenes.splice(l, 1);
 		}
 		
-		static scenes = {}
-		static active_scenes = []
+		static scenes = {};
+		static active_scenes = [];
 		
-		static updata(dt) {
+		static update(dt) {
 			for(let i = 0; i < this.active_scenes.length; i++) {
-				this.active_scenes[i].updata(dt);
+				this.active_scenes[i].update(dt);
 			};
 		}
 		
@@ -218,20 +218,12 @@
 			this._children = [];
 		}
 		
-		appendChild(child) {
-			if(child._parent) child._parent.removeChild(child);
-			child._parent = this;
-			this._children.push(child);
-		}
-		removeChild(child) {
-			if(child instanceof Child) {
-				let l = this._children.indexOf(child);
-				if(~l) this._children.splice(l, 1)[0]._parent = null;
-			};
-		}
-		
 		getParent() { return this._parent; }
 		getChildren() { return [...this._children]; };
+		getRootNode() {
+			let arr = this.getChainParent();
+			return arr[arr.length-1] || this;
+		}
 		
 		getChainParent() {
 			let arr = [];
@@ -243,7 +235,46 @@
 			return arr;
 		}
 		
-		static MAX_CHILDREN = 100
+		appendChild(node) {
+			if(node._parent !== null) return Error('This node already has a parent');
+			if(this._children.includes(node)) console.warn('This node already is child');
+			
+			let root = this.getRootNode();
+			if(root === node) console.warn('This node is root node of current tree');
+			
+			node._parent = this;
+			this._children.push(node);
+			
+			node.emit('append_node', node, this, root);
+			this.emit('append_node', node, this, root);
+			root.emit('append_node', node, this, root);
+			
+			node.emit('append_node:node', node, this, root);
+			this.emit('append_node:this', node, this, root);
+			root.emit('append_node:root', node, this, root);
+			
+			return node;
+		}
+		
+		removeChild(node) {
+			let root = this.getRootNode();
+			
+			let l = this._children.indexOf(node);
+			if(!~l) return Error('This node is not child of current node');
+			this._children.splice(l, 1)[0]._parent = null;
+			
+			node.emit('remove_node', node, this, root);
+			this.emit('remove_node', node, this, root);
+			root.emit('remove_node', node, this, root);
+			
+			node.emit('remove_node:node', node, this, root);
+			this.emit('remove_node:this', node, this, root);
+			root.emit('remove_node:root', node, this, root);
+			
+			return node;
+		}
+		
+		static MAX_CHILDREN = 100;
 	};
 	setToStringTeg(Child, 'Child');
 	
@@ -583,16 +614,16 @@
 			
 			this.slotElement = root.querySelector('.slot');
 			
-			this._sizeUpdata();
+			this._sizeUpdate();
 			window.addEventListener('resize', e => {
-				this._sizeUpdata();
+				this._sizeUpdate();
 				this.emit('resize', e);
 			});
 		}
 		
 		set pixelScale(v) {
 			this._pixelScale = v;
-			this._updata();
+			this._update();
 		}
 		get pixelScale() { return this._pixelScale; }
 		
@@ -616,7 +647,7 @@
 		get vmin() { return Math.min(this._width, this._height) / 100; }
 		get size() { return new Vector2(this._width, this._height); }
 		
-		_sizeUpdata() {
+		_sizeUpdate() {
 			let b = this.getBoundingClientRect();
 			this._width = b.width*this._pixelScale;
 			this._height = b.height*this._pixelScale;
@@ -636,7 +667,7 @@
 	
 	
 	ver = {
-		version: '1.1.0',
+		version: '1.1.1',
 		
 		codeShell, random, JSONcopy, loader, loadImage, loadScript, generateImage,
 		EventEmitter, Scene, Child,

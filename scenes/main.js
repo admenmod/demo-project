@@ -1,10 +1,10 @@
 'use strict';
 Scene.create('main', function() {
 	let { screenSize, netmap, CameraMoveingObject, Joystick } = global_ns;
-	let { Player } = nodes_ns;
-	let { PhysicsBox } = physics_ns;
+	let { Player, Node, Sprite, CollisionObject } = nodes_ns;
 	
-	let player = null, map = null, o = {}, ttt = null, ttt2 = null, ttt3 = null;
+	let player = null, map = null;
+	let rootNode = null, node2 = null, homeSprite = null, mapSprite = null;
 	
 	let cameraMoveingObject = new CameraMoveingObject(main.camera);
 	
@@ -34,6 +34,7 @@ Scene.create('main', function() {
 			ctx.putImageData(newimgdata, 0, 0);
 		}).then(img => db.inv_player = img)));
 	
+	this.preload(loadImage('./img/home2.png').then(img => db.home = img));
 	this.preload(loadImage('./img/unnamed.png').then(img => db.unnamed = img));
 	
 	
@@ -55,194 +56,142 @@ Scene.create('main', function() {
 	let resizeHandler = e => {
 		netmap.size.set(screenSize);
 		joystick.pos.set(screenSize.buf().minus(90));
-	};
-	
-	resizeHandler();
-	cvs.on('resize', resizeHandler);
-	
-	
-	class Box {
-		constructor(p = {}) {
-			this.x = p.x||0;
-			this.y = p.y||0;
-			
-			this.w = p.w||10;
-			this.h = p.h||10;
-		}
 		
-		draw(ctx) {
-			ctx.save();
-			ctx.beginPath();
-			ctx.strokeStyle = '#ffff00';
-			ctx.strokeRect(this.x, this.y, this.w, this.h);
-			ctx.restore();
-		}
+		rootNode.scale.set(7/cvs.vw);
 	};
 	
 	
-	let idBorders = [
-		203, 204, 211, 212, 228, 236
-	];
-	
+	let idBorders = [203, 204, 211, 212, 228, 236];
 	let boxes = [];
 
 
 	//===============load===============//
 	this.load = () => {
 		console.log(map);
-		
-		player = global_ns.player = new Player({
-			pos: screenSize.buf().div(2),
-			size: vec2(32, 32),
-		//	angle: Math.PI/3,
-		//	scale: vec2(0.1, 0.1),
-			image: db.player,
-			
-			speed: 0.3,
-			resist: 0.85
-		});
-		
-		player._isRenderBorder = true;
-		
-		// player = global_ns.player = new Player({
-		// 	pos: screenSize.buf().div(2),
-		// 	scale: vec2(0.1, 0.1),
-		// 	image: db.unnamed,
-			
-		// 	speed: 0.3,
-		// 	resist: 0.85
-		// });
-		
 		console.log('loaded');
 	};
 
 
 	//===============init===============//
 	this.init = () => {
-		netmap.tile.set(8*3);
+		netmap.tile.set(map.tilewidth*3);
 		
-		
-		let layer = map.layers[0];
-		let size = vec2(map.tilewidth*3, map.tileheight*3);
-		netmap.tile.set(size);
-		
-		for(let i = 0; i < layer.data.length; i++) {
-			let id = layer.data[i];
-			if(!idBorders.includes(id)) continue;
-			
-			
-			let box = new Box({
-				x: i % layer.width * size.x,
-				y: Math.floor(i / layer.width) * size.y,
-				w: size.x-1,
-				h: size.y-1
-			});
-			
-			boxes.push(box);
-		};
-		
-		
-		player.on('collide', (dir, a, b) => {
-		//	console.log(dir);
+		rootNode = new Node({
+			name: 'root',
 		});
+	//	rootNode._isRenderDebug = 1;
 		
 		
-		ttt = new nodes_ns.Sprite({
-			pos: vec2(30, 0),
-		//	rotation: Math.PI/3,
-			scale: vec2(2, 2),
+		mapSprite = rootNode.appendChild(new Sprite({
+			name: 'Map',
 			
+			scale: vec2().set(3),
+			image: db.map
+		}));
+		mapSprite._isRenderDebug = 2;
+		mapSprite.pos.plus(mapSprite.size.buf().div(10));
+		
+		
+		player = rootNode.appendChild(new Player({
+			name: 'Player',
+			
+			scale: vec2().set(1)
+		}));
+		
+		player.appendChild(new Sprite({
+			image: db.player,
+		}));
+		
+		player.appendChild(new CollisionObject({
+			size: vec2(player.getChild('Sprite').size.x, 2),
+			pos: vec2(0, player.getChild('Sprite').size.y/2-1),
+		}));
+		
+		
+		node2 = rootNode.appendChild(new Node({
+			name: 'Node2',
+			
+			pos: vec2(0, 100)
+		}));
+		
+		node2.appendChild(new Sprite({
 			image: db.player
-		});
+		}));
 		
-		ttt2 = new nodes_ns.Sprite({
-			pos: vec2(100, 0),
-		//	pos: vec2(100, 70),
-			scale: vec2(1.5, 1.5),
+		node2.appendChild(new CollisionObject({
+			size: node2.getChild('Sprite').size
+		}));
+		
+		
+		homeSprite = rootNode.appendChild(new Sprite({
+			name: 'Home',
 			
-			image: db.player
-		});
+			pos: vec2(10, 10),
+			scale: vec2(1.7, 1.7),
+			image: db.home
+		}));
 		
-		ttt3 = new nodes_ns.Sprite({
-			pos: vec2(100, 0),
-		//	pos: vec2(100, 70),
-			scale: vec2(1, 1),
+		
+		player.addScript('main', function() {
+			let sprite = this.getChild('Sprite');
 			
-			image: db.player
-		});
+			this.update = function(dt) {
+				sprite.image = db[(Math.cos(joystick.angle) < 0) ? 'player' : 'inv_player'];
+				this.position.moveAngle(joystick.value*17/dt, joystick.angle);
+			};
+			
+			console.log('init main script');
+		}, { db, joystick });
 		
-		ttt.appendChild(ttt2);
-		ttt2.appendChild(ttt3);
+		
+		resizeHandler();
+		cvs.on('resize', resizeHandler);
 		
 		
-		
-		o.root = new nodes_ns.Node({
-			pos: vec2(0, 100),
-			scale: vec2().set(3)
-		});
-		
-		o.sprite = new nodes_ns.Sprite({
-			image: db.player
-		});
-		
-		o.collision = new nodes_ns.CollisionObject({
-			size: o.sprite.size
-		});
-		
-		o.root.appendChild(o.sprite);
-		o.root.appendChild(o.collision);
+		rootNode.ready();
 		
 		console.log('inited');
 	};
 
 
-	//===============updata===============//
-	this.updata = function(dt) {
+	//===============update===============//
+	this.update = function(dt) {
 		//=======prePROCES=======//--vs--//=======EVENTS=======//
-	//	cameraMoveingObject.updata(touches, main.camera);
+	//	cameraMoveingObject.update(touches, main.camera);
 		//==================================================//
 
 
-		//=======PROCES=======//--vs--//=======UPDATA=======//
-		main.camera.moveTime(player.getPosC().minus(screenSize.buf().div(2)), 5);
-	//	main.imageSmoothingEnabled = false;
-		joystick.updata(touches);
-		
-		player.image = db[(Math.cos(joystick.angle) < 0) ? 'player' : 'inv_player'];
-		player.vel.moveAngle(joystick.value*player.speed, joystick.angle);
+		//=======PROCES=======//--vs--//=======UPDATE=======//
+		main.imageSmoothingEnabled = false;
+		joystick.update(touches);
 		
 		
-		for(let i = 0; i < boxes.length; i++) {
-			player.hasCollide(boxes[i]);
-		};
+	//	for(let i = 0; i < boxes.length; i++) player.hasCollide(boxes[i]);
 		
+		rootNode.update(dt);
 		
-		player.updata();
+		main.camera.moveTime(player.globalPos.minus(screenSize.buf().div(2)), 5);
 		
-		player.prevPos.set(player.pos);
+	//	player.prevPos.set(player.pos);
 		//==================================================//
 
 
 		//==========DRAW==========//--vs--//==========RENDER==========//
 		main.ctx.clearRect(0, 0, cvs.width, cvs.height);
 		
-		main.drawImage(db.map, 0, 0, db.map.width*3, db.map.height*3);
 		netmap.draw(main);
 		
-		player.draw(main);
+		rootNode.render(main);
 		
-		for(let i = 0; i < boxes.length; i++) boxes[i].draw(main);
 		
-	//	ttt.draw(main);
-	//	ttt2.draw(main);
-	//	ttt3.draw(main);
+	//	for(let i = 0; i < boxes.length; i++) boxes[i].draw(main);
 		
-	//	ttt.rotation += 0.001;
-	//	ttt2.rotation += 0.01;
 		
-		o.root.pos.plus(-10/dt, 0);
-		o.root.draw(main);
+	//	if(o.collision.isRectIntersect(o.collision2)) o.sprite.image = db.unnamed;
+	//	else o.sprite.image = db.player;
 		
+	//	else if(o.collision2.isRectIntersect(o.collision)) o.sprite.image = db.unnamed;
+	//	else o.sprite.image = db.player;
 		
 		joystick.draw(main.ctx);
 		
