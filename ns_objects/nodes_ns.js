@@ -2,6 +2,8 @@
 let nodes_ns = new function() {
 	function emptyFunction() {};
 	
+	let range = (v, min, max) => Math.min(Math.max(v, min), max);
+	
 	let isPointRectIntersect = (v, arr) => {
 		let d = 0;
 		for(let c = arr.length-1, n = 0; n < arr.length; c = n++) {
@@ -11,8 +13,18 @@ let nodes_ns = new function() {
 		};
 		return d;
 	};
+	/*
+	let NodeCollection = class {
+		constructor(arr) {
+			this.length = 0;
+			arr.forEach(i => Array.prototype.push.call(this, i));
+			
+			console.log(this);
+		}
+	};
 	
-	
+	new NodeCollection([53, 34]);
+	*/
 	let Node = this.Node = class extends Child {
 		constructor(p = {}) {
 			super();
@@ -27,7 +39,7 @@ let nodes_ns = new function() {
 			
 			this.scripts = {};
 			this.script_interface = {
-				position: this.position, rotation: this.rotation, scale: this.rotation,
+				position: this.position, rotation: this.rotation, scale: this.scale,
 				ready: emptyFunction, update: emptyFunction, render: emptyFunction,
 				
 				getChild: name => this.getChild(name)
@@ -39,6 +51,7 @@ let nodes_ns = new function() {
 				console, Date, Math, JSON, Set, Map, WeakSet, WeakMap,
 				Object, Array, Function, Number, String, RegExp, BigInt, Symbol
 			};
+			this.ii = 0;
 		}
 		
 		get NODE_TYPE() { return this.__proto__[Symbol.toStringTag]; }
@@ -47,97 +60,123 @@ let nodes_ns = new function() {
 		get zIndex() { return this._zIndex; }
 		
 		get pos() { return this.position; }
-		get scale() { return this._scale; }
 		get position() { return this._position; }
 		
+		get scale() { return this._scale; }
+		
+		get rot() { return this.rotation; }
+		set rot(v) { return this.rotation = v; }
 		set rotation(v) { this._rotation = v; }
 		get rotation() { return this._rotation; }
 		
 		get globalPos() { return this.globalPosition; }
+		set globalPos(v) { this.globalPosition = v; }
+		
 		get globalScale() { return this._getRelativeScale(Child.MAX_CHILDREN); }
 		get globalRotation() { return this._getRelativeRotation(Child.MAX_CHILDREN); }
+		
 		get globalPosition() { return this._getRelativePosition(Child.MAX_CHILDREN); }
+		set globalPosition(v) {
+		//	let g = this.getParent().globalPosition;
+		//	let s = this.getParent().scale;
+			
+		//	let diff = v.buf().sub(this.globalPos);
+		//	this.pos.add(diff);
+		//	if(v.x !== null) this.pos.x = (v.x-g.x)/s.x;
+		//	if(v.y !== null) this.pos.y = (v.y-g.y)/s.y;
+		}
 		
 		get globalIsRenderDebug() { return this._getRelativeIsRenderDebug(Child.MAX_CHILDREN); }
 		
-		_getRelativeIsRenderDebug(nl = 0) {
-			let v = this._isRenderDebug;
-			let tt = this.getChainParent();
-			for(let i = 0; i < Math.min(nl, tt.length, Child.MAX_CHILDREN); i++) {
-				if(tt[i]._isRenderDebug) {
-					v = tt[i]._isRenderDebug;
-					break;
-				};
-			};
-			return this._isRenderDebug||v;
-		}
-		
-		_getRelativeScale(nl = 0) {
-			let v = this.scale.buf();
-			let tt = this.getChainParent();
-			for(let i = 0; i < Math.min(nl, tt.length, Child.MAX_CHILDREN); i++) v.inc(tt[i].scale);
-			return v;
-		}
-		
-		_getRelativeRotation(nl = 0) {
-			let v = this.rotation;
-			let tt = this.getChainParent();
-			
-			for(let i = 0; i < Math.min(nl, tt.length, Child.MAX_CHILDREN); i++) v += tt[i].rotation;
-			return v;
-		}
-		
-		_getRelativePosition(nl = 0) {
-			let arr = this.getChainParent();
+		_getRelativeIsRenderDebug(nl = 0, arr = this.getChainParent()) {
 			let l = Math.min(nl, arr.length, Child.MAX_CHILDREN);
-			
-			let prev = this;
-			let v = vec2();
+			let acc = this._isRenderDebug;
 			
 			for(let i = 0; i < l; i++) {
-				let next = arr[i];
+				if(acc) break;
+				acc = arr[i]._isRenderDebug;
+			};
+			
+			return acc;
+		}
+		
+		_getRelativeScale(nl = 0, arr = this.getChainParent()) {
+			let l = Math.min(nl, arr.length, Child.MAX_CHILDREN);
+			let acc = this.scale.buf();
+			
+			for(let i = 0; i < l; i++) acc.inc(arr[i].scale);
+			
+			return acc;
+		}
+		
+		_getRelativeRotation(nl = 0, arr = this.getChainParent()) {
+			let l = Math.min(nl, arr.length, Child.MAX_CHILDREN);
+			let acc = this.rotation;
+			
+			for(let i = 0; i < l; i++) acc += arr[i].rotation;
+			
+			return acc;
+		}
+		
+		_getRelativePosition(nl = 0, arr = this.getChainParent()) {
+			let l = Math.min(nl, arr.length, Child.MAX_CHILDREN);
+			let acc = vec2();
+			
+			let prev = this, next = null;
+			
+			if(!arr.length) acc.add(this.position.buf());
+			
+			for(let i = 0; i < l; i++) {
+				next = arr[i];
 				
-				let acc = prev.position.buf()//.inc(next.scale);
+				let v = prev.position.buf();
+				acc.add(v).inc(next.scale);
 				if(next.rotation !== 0) acc.angle = next.rotation;
-				v.plus(acc);
 				
 				prev = next;
 			};
+		//	if(arr.length) acc.add(arr[arr.length-1]);
 			
-			if(arr.length) v.plus(prev.position);
-			
-			return v.inc(this.globalScale);
+			return acc;
 		}
 		
-		runScript(name) { this.scripts[name]?.call(this.script_interface); }
+		runScript(name) { this.scripts[name]?.call(this); }
 		// addScript(name, code, addAPI) { this.scripts[name] = codeShell(code, Object.assign(addAPI, this.useAPI)); }
 		addScript(name, code, addAPI) { this.scripts[name] = code; }
 		
 		ready() {
-			this.emit('ready');
+		//	this.emit('ready');
 			
-			this.runScript('main');
-			this.script_interface.ready();
+		//	this.runScript('main');
+		//	this.script_interface.ready.call(this);
 			
 			let arr = this._children;
 			for(let i = 0; i < arr.length; i++) arr[i].ready();
 		}
 		update(dt = 1000/60) {
-			this.emit('update', dt);
+		//	this.emit('update', dt);
 			
-			this.script_interface.update(dt);
+		//	this._update(dt);
+		//	this.script_interface.update.call(this, dt);
 			
 			let arr = this._children;
 			for(let i = 0; i < arr.length; i++) arr[i].update(dt);
 		}
 		render(ctx) {
+		/*	let e = {
+				preventDefault: () => prevented = true
+			};
+			
+			let prevented = false;
+			this.emit('render', ctx, e);
+			
+			if(prevented) return;
+			*/
 			ctx.save();
 			this.draw(ctx);
 			ctx.restore();
 			
-			this.emit('render', ctx);
-			
-			this.script_interface.render(ctx);
+		//	this.script_interface.render.call(this, ctx);
 			
 			let arr = this.getChildren().sort((a, b) => a.zIndex - b.zIndex);
 			for(let i = 0; i < arr.length; i++) arr[i].render(ctx);
@@ -149,6 +188,7 @@ let nodes_ns = new function() {
 		
 		renderDebug(ctx, c = 30) {
 			let pos = this.globalPosition;
+			
 			ctx.beginPath();
 			ctx.lineWidth = 1;
 			ctx.strokeStyle = '#3377ee';
@@ -169,7 +209,15 @@ let nodes_ns = new function() {
 			*/
 		}
 		
-		getChild(name) { return this._children.find(i => i.name === name); }
+		getChild(path) {
+			let l = path.search('/');
+			if(!~l) return this._children.find(i => i.name === path);
+			
+			let left = path.slice(0, l);
+			let right = path.slice(l+1);
+			
+			return this.getChild(left).getChild(right);
+		}
 		appendChild(node) {
 			if(this.getChild(node.name)) return Error('err: name match');
 			return super.appendChild(node);
@@ -186,24 +234,24 @@ let nodes_ns = new function() {
 			super(p);
 			
 			this.visible = p.visible||true;
-			this._size = (p.size || vec2()).buf();
 			
 			this._rotationOffsetPoint = (p.rotationOffsetPoint || vec2()).buf();
 			this.alpha = p.alpha !== undefined ? p.alpha : 1;
 		}
 		
-		get size() { return this._size; }
-		get globalSize() { return this.globalScale.inc(this._size); }
-		
 		get alpha() { return this._alpha; }
 		set alpha(v) { return this._alpha = Math.min(1, Math.max(0, v)); }
 		get globalAlpha() { return this._getRelativeAlpha(Child.MAX_CHILDREN); }
 		
-		_getRelativeAlpha(nl = 0) {
-			let v = this.alpha;
-			let tt = this.getChainParent();
-			for(let i = 0; i < Math.min(nl, tt.length, Child.MAX_CHILDREN); i++) v *= tt[i].alpha || 1;
-			return v;
+		_getRelativeAlpha(nl = 0, arr = this.getChainParent()) {
+			let l = Math.min(nl, arr.length, Child.MAX_CHILDREN);
+			let acc = this.alpha;
+			
+			for(let i = 0; i < l; i++) {
+				if(arr[i].alpha !== undefined) acc *= arr[i].alpha;
+			};
+			
+			return acc;
 		}
 	};
 	Spatial.prototype[Symbol.toStringTag] = 'Spatial';
@@ -222,9 +270,12 @@ let nodes_ns = new function() {
 			this._drawOffset = (p.drawOffset || vec2()).buf();
 		}
 		
+		get size() { return this._size; }
+		get globalSize() { return this.globalScale.inc(this._size); }
+		
 		renderDebug(ctx) {
 			let pos = this.globalPosition, size = this.globalSize;
-			let drawPos = pos.buf().plus(this._drawOffset).minus(size.buf().div(2));
+			let drawPos = pos.buf().add(this._drawOffset).sub(size.buf().div(2));
 			
 			ctx.beginPath();
 			ctx.globalAlpha = this.globalAlpha+0.2;
@@ -244,13 +295,13 @@ let nodes_ns = new function() {
 		draw(ctx) {
 			if(!this.visible) return;
 			
-			let pos = this.globalPosition, size = this.globalSize;
-			let drawPos = pos.buf().plus(this._drawOffset).minus(size.buf().div(2));
+			let pos = this.globalPosition, rot = this.globalRotation, size = this.globalSize;
+			let drawPos = pos.buf().add(this._drawOffset).sub(size.buf().div(2));
 			
 			ctx.beginPath();
 			ctx.globalAlpha = this.globalAlpha;
 			
-			if(this.globalRotation !== 0) ctx.rotateOffset(this.globalRotation+this._drawAngleOffset, pos.buf().plus(this._rotationOffsetPoint));
+		//	ctx.rotateOffset(rot+this._drawAngleOffset, pos.buf().add(this._rotationOffsetPoint));
 			
 			ctx.drawImage(this.image, drawPos.x, drawPos.y, size.x, size.y);
 			
@@ -265,17 +316,23 @@ let nodes_ns = new function() {
 	let CollisionObject = this.CollisionObject = class extends Spatial {
 		constructor(p = {}) {
 			super(p);
+			this.type_collision = p.type||'rect';
+			
+			this._size = (p.size || vec2()).buf();
 		}
+		
+		get size() { return this._size; }
+		get globalSize() { return this.globalScale.inc(this._size); }
 		
 		getStaticCollisionBox() {
 			let pos = this.globalPosition;
 			let hSize = this.globalSize.div(2);
 			
 			return [
-				pos.buf().minus(hSize),
-				pos.buf().plus(hSize.x, -hSize.y),
-				pos.buf().plus(hSize), 
-				pos.buf().plus(-hSize.x, hSize.y)
+				pos.buf().sub(hSize),
+				pos.buf().add(hSize.x, -hSize.y),
+				pos.buf().add(hSize), 
+				pos.buf().add(-hSize.x, hSize.y)
 			];
 		}
 		
@@ -291,36 +348,37 @@ let nodes_ns = new function() {
 			
 			lt.angle = rt.angle = rb.angle = lb.angle = rotation;
 			
-			return [lt.plus(pos), rt.plus(pos), rb.plus(pos), lb.plus(pos)];
+			return [lt.add(pos), rt.add(pos), rb.add(pos), lb.add(pos)];
 		}
 		
 		getCollisionBox() {
 			return this.globalRotation === 0 ? this.getStaticCollisionBox() : this.getDynamicCollisionBox();
 		}
 		
-		getBoundingRect() {
-			let pos = this.globalPosition, size = this.globalSize;
+		getBoundingRect(pos = this.globalPosition) {
+			let size = this.globalSize;
 			return {
 				x: pos.x, w: size.x, width: size.x,
 				y: pos.y, h: size.y, height: size.y,
 				
-				left: pos.x - size.x/2,
-				right: pos.x + size.x/2,
-				top: pos.y - size.y/2,
-				bottom: pos.y + size.y/2
+				left:	pos.x - size.x/2,
+				right:	pos.x + size.x/2,
+				top:	pos.y - size.y/2,
+				bottom:	pos.y + size.y/2
 			};
 		}
 		
 		isStaticRectIntersect(b) {
 			let a = this.getBoundingRect();
 			b = b.getBoundingRect?.() || b;
-			return a.right > b.left && b.right > a.left && a.bottom > b.top && b.bottom > a.top;
+		//	return !(a.right < b.left || b.right < a.left || a.bottom < b.top || b.bottom < a.top);
+			return !(a.x < b.x-a.w || a.x > b.x+b.w || a.y < b.y-a.h || a.y > b.y+b.h);
 		}
 		
 		isDynamicRectIntersect(b) {
 			let v = false;
 			let a = this.getDynamicCollisionBox();
-			b = b.getDynamicCollisionBox();
+		//	b = b.getDynamicCollisionBox();
 			
 			for(let i = 0; i < a.length; i++) {
 				if(v = isPointRectIntersect(a[i], b)) break;
@@ -334,18 +392,23 @@ let nodes_ns = new function() {
 		}
 		
 		renderDebug(ctx) {
-			let box = this.getCollisionBox();
+		//	let box = this.getCollisionBox();
+			let b = this.getBoundingRect();
 			
 			ctx.beginPath();
 			ctx.globalAlpha = 0.5;
 			ctx.lineWidth = 1;
 			ctx.fillStyle = '#227777';
 			ctx.strokeStyle = '#33ffff';
-			ctx.moveTo(box[0].x, box[0].y);
-			for(let i = 1; i < box.length; i++) ctx.lineTo(box[i].x, box[i].y);
-			ctx.closePath();
+		//	ctx.moveTo(box[0].x, box[0].y);
+		//	for(let i = 1; i < box.length; i++) ctx.lineTo(box[i].x, box[i].y);
+		//	ctx.closePath();
+		//	console.log(b);
+		//	ctx.rect(b.x, b.y, b.w, b.h);
 			ctx.fill();
 			ctx.stroke();
+			
+			super.renderDebug(ctx);
 		}
 	};
 	CollisionObject.prototype[Symbol.toStringTag] = 'CollisionObject';
@@ -354,49 +417,125 @@ let nodes_ns = new function() {
 	let PhysicsBody = this.PhysicsBody = class extends CollisionObject {
 		constructor(p = {}) {
 			super(p);
+			this.type_physics = p.type||'rigid';
+			
+			this._prevPos = this.pos.buf();
 			
 			this._velocity = vec2(); // motion
+			this._velocityRotation = 0;
 			
-			this._prevBox = this.getBoundingRect();
+			this.resist = p.resist||0.9;
+			this.resistRot = p.resistRot||0.9;
+			
+			this._collision_check_objects = [];
+			
+			this.script_interface.velocity = this.velocity;
 		}
 		
 		get vel() { return this.velocity; }
 		get velocity() { return this._velocity; }
 		
-		collisionUpdate(box) { // todo: finalize
-			let a = this._prevBox, b = box.getBoundingRect();
+		get velRot() { return this.velocityRotation; }
+		set velRot(v) { this.velocityRotation = v; }
+		get velocityRotation() { return this._velocityRotation; }
+		set velocityRotation(v) { this._velocityRotation = v; }
+		
+		collisionUpdateTo(obj) { // todo: finalize
+			if(this.type_physics === 'static') return;
 			
-			if(this.isStaticRectIntersect(b)) {
-				let w2 = a.w/2, h2 = a.h/2;
-				
-				if(a.right < b.left) {
-					this.vel.x = 0;
-					this.pos.x = b.left - w2;
-				} else if(b.right < a.left) {
-					this.vel.x = 0;
-					this.pos.x = b.right + w2;
-				} else if(a.bottom < b.top) {
-					this.vel.y = 0;
-					this.pos.y = b.top - h2;
-				} else if(b.bottom < a.top) {
-					this.vel.y = 0;
-					this.pos.y = b.bottom + h2;
-				};
+			let a = this.getBoundingRect(this._prevPos), b = obj.getBoundingRect();
+			
+			let t = this.isStaticRectIntersect(b);
+			if(!t) return false;
+			
+			let c = 10;
+			/*
+			if(a.x >= b.x+b.w) {
+				this.vel.x = 0;//.projectOnto(vec2(0, 1).normalize());
+			//	this.globalPosition = vec2(b.x+b.w, null);
+				this.pos.x = b.x+b.w;
 			};
-			
-			this._prevBox = this.getBoundingRect();
+			if(a.x <= b.x-a.w) {
+				this.vel.x = 0;//.projectOnto(vec2(0, 1).normalize());
+			//	this.globalPosition = vec2(b.x-a.w, null);
+				this.pos.x = b.x-a.w;
+			};
+			if(a.y >= b.y+b.h) {
+				this.vel.y = 0;//.projectOnto(vec2(1, 0).normalize());
+			//	this.globalPosition = vec2(null, b.y+b.h);
+				this.pos.y = b.y+b.h;
+			};
+			if(a.y <= b.y-a.h) {
+				this.vel.y = 0;//.projectOnto(vec2(1, 0).normalize());
+			//	this.globalPosition = vec2(null, b.y-a.h);
+				this.pos.y = b.y-a.h;
+			};
+			*/
+			//*
+			if(a.x >= b.x+b.w) {
+			//	this.pos.x = b.x+b.w;
+				this.vel.projectOnto(vec2(1, 1));
+			//	this.vel.x = 0;
+			};
+			if(a.x <= b.x-a.w) {
+				this.pos.x = b.x-a.w;
+				this.vel.x = 0;
+			};
+			if(a.y >= b.y+b.h) {
+				this.pos.y = b.y+b.h;
+				this.vel.y = 0;
+			};
+			if(a.y <= b.y-a.h) {
+				this.pos.y = b.y-a.h;
+				this.vel.y = 0;
+			};
+			//*/
+			return t;
+		}
+		
+		collisionUpdate(arr = this._collision_check_objects) {
+			for(let i = 0; i < arr.length; i++) {
+				if(this !== arr[i]) this.collisionUpdateTo(arr[i]);
+			};
 		}
 		
 		update(dt) {
-		//	this.collisionUpdate();
+			this.velRot *= this.resistRot;
+			this.rot += this.velRot;
+			
+			this.vel.inc(this.resist);
+			this.pos.add(this.vel);
+			
+			this.collisionUpdate();
 			super.update(dt);
 		}
 	};
 	PhysicsBody.prototype[Symbol.toStringTag] = 'PhysicsBody';
 	//======================================================================//
 	
+	
+	let Parts = this.Parts = class extends Spatial {
+		constructor(p = {}) {
+			super(p);
+		}
+		
+		draw(ctx) {
+			let pos = this.globalPosition, rot = this.globalRotation;
+			let size = vec2(20, 20).inc(this.globalScale);
+			
+			ctx.rotateOffset(rot, pos);
+			
+			ctx.globalAlpha = this.globalAlpha;
+			ctx.fillStyle = '#000000';
+			ctx.fillRect(pos.x - size.x/2, pos.y - size.y/2, size.x, size.y);
+			
+			super.draw(ctx);
+		}
+	};
+	
+	
 	/*
-			this.sizePlus = p.sizePlus||vec2();
+			this.sizeadd = p.sizeadd||vec2();
 			this.image = p.image;
 			
 			if(!p.size || p.size.isSame(Vector2.ZERO)) this.size = vec2(this.image.width, this.image.height);
@@ -428,56 +567,12 @@ let nodes_ns = new function() {
 			super(p);
 			this.prevPos = this.pos.buf();
 			
-			this.speed = p.speed||1;
-			this.resist = p.resist||0.9;
-		}
-		
-		hasCollide(b) {
-			if(this.isStaticRectIntersect(b)) {
-				let dir = null;
-				
-				let size = this.globalSize;
-				
-				let a = {
-					x: this.prevPos.x,
-					w: size.x,
-					y: this.prevPos.y,
-					h: size.y
-				};
-				//*
-				if(a.x <= b.x - a.w) dir = 'left'
-				if(a.x >= b.x + b.w) dir = 'right';
-				if(a.y <= b.y - a.h) dir = 'top';
-				if(a.y >= b.y + b.h) dir = 'bottom';
-				
-				this.emit('collide', dir, a, b);
-				this.collideHandler(dir, a, b);
-			};
-		}
-		
-		collideHandler(dir, a, b) {
-			let c = 0;
+			this.speed = p.speed||0.2;
 			
-			if(dir === 'left') {
-				this.vel.x = 0;
-				this.pos.x = b.x - a.w + c;
-			} else if(dir === 'right') {
-				this.vel.x = 0;
-				this.pos.x = b.x + b.w - c;
-			} else if(dir === 'top') {
-				this.vel.y = 0;
-				this.pos.y = b.y - a.h + c;
-			} else if(dir === 'bottom') {
-				this.vel.y = 0;
-				this.pos.y = b.y + b.h - c;
-			};
-		}
-		
-		update(dt) {
-			this.vel.inc(this.resist/dt);
-			this.pos.plus(this.vel/dt);
+			this.targetRotation = 0;
 			
-			super.update(dt);
+			this.script_interface.speed = this.speed;
+			this.script_interface.resist = this.resist;
 		}
 	};
 };

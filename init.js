@@ -12,6 +12,7 @@ let { main, back } = cvs.cameraImitationCanvas;
 let touches = new TouchesController(cvs);
 
 let db = {}; // resures: [images, audios]
+let cfg = {};
 
 
 loadScript('map-parser.js');

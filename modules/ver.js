@@ -15,6 +15,7 @@
 	// helpers
 	let u = a => a !== undefined;
 	let setConstantProperty = (o, p, v) => Object.defineProperty(o, p, { value: v, enumerable: true });
+	let setHiddenProperty = (o, p, v) => Object.defineProperty(o, p, { value: v, writable: true, configurable: true });
 	let setToStringTeg = (o, v) => Object.defineProperty(o, Symbol.toStringTag, { value: v, configurable: true });
 	let setGetter = (o, p, getter) => Object.defineProperty(o, p, { get: getter, enumerable: true, configurable: true });
 	let injectingEventEmitterMethods = o => {
@@ -294,8 +295,8 @@
 		get w()  { return this[3]; }
 		set w(v) { this[3] = v; }
 		
-		plus(...vecs) { return VectorN.operation.call(this, (n, i) => this[i] += n||0, vecs); }
-		minus(...vecs) { return VectorN.operation.call(this, (n, i) => this[i] -= n||0, vecs); }
+		add(...vecs) { return VectorN.operation.call(this, (n, i) => this[i] += n||0, vecs); }
+		sub(...vecs) { return VectorN.operation.call(this, (n, i) => this[i] -= n||0, vecs); }
 		inc(...vecs) { return VectorN.operation.call(this, (n, i) => this[i] *= n||1, vecs); }
 		div(...vecs) { return VectorN.operation.call(this, (n, i) => this[i] /= n||1, vecs); }
 		mod(...vecs) { return VectorN.operation.call(this, (n, i) => this[i] %= n, vecs); }
@@ -353,8 +354,8 @@
 	setToStringTeg(VectorN, 'VectorN');
 	
 	let vecN = (...args) => new VectorN(...args);
-	VectorN.prototype.add = VectorN.prototype.plus;
-	VectorN.prototype.sub = VectorN.prototype.minus;
+	setHiddenProperty(VectorN.prototype, 'plus', VectorN.prototype.add);
+	setHiddenProperty(VectorN.prototype, 'minus', VectorN.prototype.sub);
 	
 	
 	class Vector2 {
@@ -362,12 +363,12 @@
 			this.x = +x||0;
 			this.y = +y||(u(y) ? +y : +x||0);
 		}
-		plus(x, y) {
+		add(x, y) {
 			if(u(x.x) && u(x.y)) { this.x += x.x; this.y += x.y; }
 			else { this.x += x||0; this.y += u(y) ? y : x||0; };
 			return this;
 		}
-		minus(x, y) {
+		sub(x, y) {
 			if(u(x.x) && u(x.y)) { this.x -= x.x; this.y -= x.y; }
 			else { this.x -= x||0; this.y -= u(y) ? y : x||0; };
 			return this;
@@ -458,6 +459,11 @@
 		
 		dot(v) { return this.x*v.x + this.y*v.y; }
 		cross(v) { return this.x*v.y - this.y*v.x; }
+		projectOnto(v) {
+			let c = (this.x*v.x + this.y*v.y) / (v.x*v.x + v.y*v.y);
+			this.x = v.x*c; this.y = v.y*c;
+			return this;
+		}
 		normalize(a = 1) {
 			let l = this.module/a;
 			this.x /= l; this.y /= l;
@@ -471,8 +477,8 @@
 	setConstantProperty(Vector2, 'ZERO', Object.freeze(new Vector2()));
 	
 	let vec2 = (x, y) => new Vector2(x, y);
-	Vector2.prototype.add = Vector2.prototype.plus;
-	Vector2.prototype.sub = Vector2.prototype.minus;
+	setHiddenProperty(Vector2.prototype, 'plus', Vector2.prototype.add);
+	setHiddenProperty(Vector2.prototype, 'minus', Vector2.prototype.sub);
 	//======================================================================//
 	
 	class CameraImitationCanvas {
