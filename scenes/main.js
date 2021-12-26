@@ -59,7 +59,7 @@ Scene.create('main', function() {
 		netmap.size.set(screenSize);
 		joystick.pos.set(screenSize.buf().minus(90));
 		
-	//	rootNode.scale.set(5/cvs.vw);
+		rootNode.scale.set(5/cvs.vw);
 	};
 	
 	
@@ -79,7 +79,11 @@ Scene.create('main', function() {
 		netmap.tile.set(map.tilewidth*3);
 		
 		
-		rootNode = new Node({ name: 'root' });
+		rootNode = new Node({
+			name: 'root',
+			
+		//	pos: vec2(100, 100)
+		});
 		rootNode._isRenderDebug = 1;
 		
 		
@@ -99,13 +103,13 @@ Scene.create('main', function() {
 			pos: vec2(-100, -100),
 			scale: vec2().set(0.3),
 			
-			speed: 0.1, resist: 0.97
+			speed: 0.3, resist: 0.97
 		}));
 		player._collision_check_objects = ropo;
 		
 		player.appendChild(new Sprite({
 			image: db.car,
-		//	pos: vec2(85, 0),
+			pos: vec2(85, 0),
 		//	drawAngleOffset: -Math.PI/2
 		}));
 		player.size.set(player.getChild('Sprite').size);
@@ -137,12 +141,12 @@ Scene.create('main', function() {
 		}));
 		
 		
-		player.getChild('Sprite').appendChild(new CollisionObject({
+	/*	player.getChild('Sprite').appendChild(new CollisionObject({
 			size: player.getChild('Sprite').size,
 			// size: vec2(player.getChild('Sprite').size.x, 2),
 			// pos: vec2(0, player.getChild('Sprite').size.y/2-1),
 		}));
-		
+	*/
 		homeNode = rootNode.appendChild(new PhysicsBody({
 			name: 'Home',
 			type: 'static',
@@ -158,8 +162,6 @@ Scene.create('main', function() {
 		ropo.push(player, homeNode);
 		
 		
-		player.rotationVel = 0;
-		
 		window.handler = function(dt) {
 			let node = player;
 			
@@ -172,21 +174,19 @@ Scene.create('main', function() {
 			let rot = vec2(Math.cos(node.rotation), Math.sin(node.rotation));
 			let rotTarget = vec2(Math.cos(node.targetRotation), Math.sin(node.targetRotation));
 			
-			let speedRotate = node.speedRotation * node.velocity.module;
 			let speed = 0;
+			let speedRotate = node.speedRotation * node.velocity.module/1.5;
 			
 			if(Math.sin(joystick.angle) < 0) speed = node.speed;
 			else speed = -node.speed/1.5;
 			
 			
 			node.velRot += speedRotate * Math.cos(joystick.angle) * Math.sign(speed);
-			
-		//	node.velocity.moveAngle(joystick.value*speed * 16/dt, node.rotation);
-			node.resist = 0.97;
-			node.vel.moveAngle(0.3*joystick.value * 16/dt, joystick.angle);
+			node.velocity.moveAngle(joystick.value*speed * 16/dt, node.rotation);
+		//	node.vel.moveAngle(0.3*joystick.value * 16/dt, joystick.angle);
 		};
 		
-	//	player.on('update', handler);
+		player.on('update', handler);
 		
 		
 		
@@ -252,12 +252,9 @@ Scene.create('main', function() {
 		//=======PROCES=======//--vs--//=======UPDATE=======//
 		back.imageSmoothingEnabled = false;
 		joystick.update(touches);
-		
-		
-	//	for(let i = 0; i < boxes.length; i++) player.hasCollide(boxes[i]);
 	
 	//	rootNode.getChild('Player/Sprite').rotation += 0.01;
-		handler(dt);
+	//	handler(dt);
 		rootNode.update(dt);
 		player._prevPos.set(player.pos);
 		
@@ -274,8 +271,6 @@ Scene.create('main', function() {
 		
 		rootNode.render(main);
 		
-		
-	//	for(let i = 0; i < boxes.length; i++) boxes[i].draw(main);
 		
 		joystick.draw(main.ctx);
 		

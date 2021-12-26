@@ -413,7 +413,7 @@
 			else { this.x = x||0; this.y = u(y) ? y : x||0; };
 			return this;
 		}
-		buf(x = 0, y = 0) { return new Vector2(this.x, this.y); }
+		buf(x, y) { return new Vector2(u(x)||this.x, u(y)||this.y); }
 		getDistance(v) { return Math.sqrt((v.x-this.x) ** 2 + (v.y-this.y) ** 2); }
 		
 		moveAngle(mv = 0, a = 0) {

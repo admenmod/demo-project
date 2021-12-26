@@ -59,24 +59,23 @@ let nodes_ns = new function() {
 		set zIndex(v) { this._zIndex = v; }
 		get zIndex() { return this._zIndex; }
 		
-		get pos() { return this.position; }
+		get pos() { return this._position; }
 		get position() { return this._position; }
 		
 		get scale() { return this._scale; }
 		
-		get rot() { return this.rotation; }
-		set rot(v) { return this.rotation = v; }
+		set rot(v) { this._rotation = v; }
+		get rot() { return this._rotation; }
 		set rotation(v) { this._rotation = v; }
 		get rotation() { return this._rotation; }
 		
-		get globalPos() { return this.globalPosition; }
-		set globalPos(v) { this.globalPosition = v; }
 		
 		get globalScale() { return this._getRelativeScale(Child.MAX_CHILDREN); }
 		get globalRotation() { return this._getRelativeRotation(Child.MAX_CHILDREN); }
 		
+		get globalPos() { return this.globalPosition; }
 		get globalPosition() { return this._getRelativePosition(Child.MAX_CHILDREN); }
-		set globalPosition(v) {
+	//	set globalPosition(v) {
 		//	let g = this.getParent().globalPosition;
 		//	let s = this.getParent().scale;
 			
@@ -84,7 +83,7 @@ let nodes_ns = new function() {
 		//	this.pos.add(diff);
 		//	if(v.x !== null) this.pos.x = (v.x-g.x)/s.x;
 		//	if(v.y !== null) this.pos.y = (v.y-g.y)/s.y;
-		}
+	//	}
 		
 		get globalIsRenderDebug() { return this._getRelativeIsRenderDebug(Child.MAX_CHILDREN); }
 		
@@ -144,39 +143,36 @@ let nodes_ns = new function() {
 		// addScript(name, code, addAPI) { this.scripts[name] = codeShell(code, Object.assign(addAPI, this.useAPI)); }
 		addScript(name, code, addAPI) { this.scripts[name] = code; }
 		
+		_ready() {}
 		ready() {
-		//	this.emit('ready');
-			
-		//	this.runScript('main');
-		//	this.script_interface.ready.call(this);
+			this.emit('ready');
+			this._ready();
 			
 			let arr = this._children;
 			for(let i = 0; i < arr.length; i++) arr[i].ready();
 		}
+		
+		_update() {}
 		update(dt = 1000/60) {
-		//	this.emit('update', dt);
-			
-		//	this._update(dt);
-		//	this.script_interface.update.call(this, dt);
+			this.emit('update', dt);
+			this._update(dt);
 			
 			let arr = this._children;
 			for(let i = 0; i < arr.length; i++) arr[i].update(dt);
 		}
-		render(ctx) {
-		/*	let e = {
-				preventDefault: () => prevented = true
-			};
-			
-			let prevented = false;
-			this.emit('render', ctx, e);
-			
-			if(prevented) return;
-			*/
+		_render(ctx) {
 			ctx.save();
 			this.draw(ctx);
 			ctx.restore();
+		}
+		render(ctx) {
+			let prevented = false;
+			let e = { preventDefault: () => prevented = true };
 			
-		//	this.script_interface.render.call(this, ctx);
+			this.emit('render', ctx, e);
+			
+			if(prevented) return;
+			this._render(ctx);
 			
 			let arr = this.getChildren().sort((a, b) => a.zIndex - b.zIndex);
 			for(let i = 0; i < arr.length; i++) arr[i].render(ctx);
@@ -301,7 +297,7 @@ let nodes_ns = new function() {
 			ctx.beginPath();
 			ctx.globalAlpha = this.globalAlpha;
 			
-		//	ctx.rotateOffset(rot+this._drawAngleOffset, pos.buf().add(this._rotationOffsetPoint));
+			ctx.rotateOffset(rot+this._drawAngleOffset, pos.buf().add(this._rotationOffsetPoint));
 			
 			ctx.drawImage(this.image, drawPos.x, drawPos.y, size.x, size.y);
 			
@@ -358,8 +354,8 @@ let nodes_ns = new function() {
 		getBoundingRect(pos = this.globalPosition) {
 			let size = this.globalSize;
 			return {
-				x: pos.x, w: size.x, width: size.x,
-				y: pos.y, h: size.y, height: size.y,
+				x: pos.x - size.x/2, w: size.x, width: size.x,
+				y: pos.y - size.y/2, h: size.y, height: size.y,
 				
 				left:	pos.x - size.x/2,
 				right:	pos.x + size.x/2,
@@ -403,10 +399,10 @@ let nodes_ns = new function() {
 		//	ctx.moveTo(box[0].x, box[0].y);
 		//	for(let i = 1; i < box.length; i++) ctx.lineTo(box[i].x, box[i].y);
 		//	ctx.closePath();
-		//	console.log(b);
-		//	ctx.rect(b.x, b.y, b.w, b.h);
-			ctx.fill();
-			ctx.stroke();
+		//	ctx.fill();
+		//	ctx.stroke();
+			ctx.fillRect(b.left, b.top, b.w, b.h);
+			ctx.strokeRect(b.left, b.top, b.w, b.h);
 			
 			super.renderDebug(ctx);
 		}
@@ -432,13 +428,13 @@ let nodes_ns = new function() {
 			this.script_interface.velocity = this.velocity;
 		}
 		
-		get vel() { return this.velocity; }
+		get vel() { return this._velocity; }
 		get velocity() { return this._velocity; }
 		
-		get velRot() { return this.velocityRotation; }
-		set velRot(v) { this.velocityRotation = v; }
-		get velocityRotation() { return this._velocityRotation; }
+		set velRot(v) { this._velocityRotation = v; }
+		get velRot() { return this._velocityRotation; }
 		set velocityRotation(v) { this._velocityRotation = v; }
+		get velocityRotation() { return this._velocityRotation; }
 		
 		collisionUpdateTo(obj) { // todo: finalize
 			if(this.type_physics === 'static') return;
@@ -448,48 +444,24 @@ let nodes_ns = new function() {
 			let t = this.isStaticRectIntersect(b);
 			if(!t) return false;
 			
-			let c = 10;
-			/*
-			if(a.x >= b.x+b.w) {
-				this.vel.x = 0;//.projectOnto(vec2(0, 1).normalize());
-			//	this.globalPosition = vec2(b.x+b.w, null);
-				this.pos.x = b.x+b.w;
-			};
-			if(a.x <= b.x-a.w) {
-				this.vel.x = 0;//.projectOnto(vec2(0, 1).normalize());
-			//	this.globalPosition = vec2(b.x-a.w, null);
-				this.pos.x = b.x-a.w;
-			};
-			if(a.y >= b.y+b.h) {
-				this.vel.y = 0;//.projectOnto(vec2(1, 0).normalize());
-			//	this.globalPosition = vec2(null, b.y+b.h);
-				this.pos.y = b.y+b.h;
-			};
-			if(a.y <= b.y-a.h) {
-				this.vel.y = 0;//.projectOnto(vec2(1, 0).normalize());
-			//	this.globalPosition = vec2(null, b.y-a.h);
-				this.pos.y = b.y-a.h;
-			};
-			*/
-			//*
-			if(a.x >= b.x+b.w) {
-			//	this.pos.x = b.x+b.w;
-				this.vel.projectOnto(vec2(1, 1));
-			//	this.vel.x = 0;
-			};
-			if(a.x <= b.x-a.w) {
-				this.pos.x = b.x-a.w;
+			let c = 1;
+			if(a.x < b.x-a.w) {
+				this.pos.x = b.x-a.w + a.w/2 - c;
 				this.vel.x = 0;
 			};
-			if(a.y >= b.y+b.h) {
-				this.pos.y = b.y+b.h;
+			if(a.x > b.x+b.w) {
+				this.pos.x = b.x+b.w + a.w/2 + c;
+				this.vel.x = 0;
+			};
+			if(a.y < b.y-a.h) {
+				this.pos.y = b.y-a.h + a.h/2 - c;
 				this.vel.y = 0;
 			};
-			if(a.y <= b.y-a.h) {
-				this.pos.y = b.y-a.h;
+			if(a.y > b.y+b.h) {
+				this.pos.y = b.y+b.h + a.h/2 + c;
 				this.vel.y = 0;
 			};
-			//*/
+			
 			return t;
 		}
 		
@@ -499,7 +471,7 @@ let nodes_ns = new function() {
 			};
 		}
 		
-		update(dt) {
+		_update(dt) {
 			this.velRot *= this.resistRot;
 			this.rot += this.velRot;
 			
@@ -507,7 +479,8 @@ let nodes_ns = new function() {
 			this.pos.add(this.vel);
 			
 			this.collisionUpdate();
-			super.update(dt);
+			
+			super._update(dt);
 		}
 	};
 	PhysicsBody.prototype[Symbol.toStringTag] = 'PhysicsBody';
