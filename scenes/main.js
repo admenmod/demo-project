@@ -59,7 +59,7 @@ Scene.create('main', function() {
 		netmap.size.set(screenSize);
 		joystick.pos.set(screenSize.buf().minus(90));
 		
-		rootNode.scale.set(5/cvs.vw);
+	//	rootNode.scale.set(5/cvs.vw);
 	};
 	
 	
@@ -78,12 +78,17 @@ Scene.create('main', function() {
 	this.init = () => {
 		netmap.tile.set(map.tilewidth*3);
 		
+		window.root = new Node({
+		//	pos: vec2(10, 30),
+		//	scale: vec2(1.5, 1.7)
+		});
 		
-		rootNode = new Node({
+		rootNode = root.appendChild(new nodes_ns.Spatial({
 			name: 'root',
 			
+		//	scale: vec2(1.5, 1)
 		//	pos: vec2(100, 100)
-		});
+		}));
 		rootNode._isRenderDebug = 1;
 		
 		
@@ -96,8 +101,12 @@ Scene.create('main', function() {
 		mapSprite.pos.plus(mapSprite.size.buf().div(10));
 		mapSprite._isRenderDebug = 2;
 		
+		rootNode.appendChild(new Node({
+			name: 'nnn',
+		//	scale: vec2(2, 1.5)
+		}));
 		
-		player = rootNode.appendChild(new Player({
+		player = rootNode.getChild('nnn').appendChild(new Player({
 			name: 'Player',
 			
 			pos: vec2(-100, -100),
@@ -147,11 +156,12 @@ Scene.create('main', function() {
 			// pos: vec2(0, player.getChild('Sprite').size.y/2-1),
 		}));
 	*/
+		
 		homeNode = rootNode.appendChild(new PhysicsBody({
 			name: 'Home',
 			type: 'static',
 			
-			pos: vec2(50, 50),
+			pos: vec2(100, 100),
 			scale: vec2(1.7, 1.7)
 		}));
 		homeNode._collision_check_objects = ropo;
@@ -182,8 +192,8 @@ Scene.create('main', function() {
 			
 			
 			node.velRot += speedRotate * Math.cos(joystick.angle) * Math.sign(speed);
-			node.velocity.moveAngle(joystick.value*speed * 16/dt, node.rotation);
-		//	node.vel.moveAngle(0.3*joystick.value * 16/dt, joystick.angle);
+		//	node.velocity.moveAngle(joystick.value*speed * 16/dt, node.rotation);
+			node.vel.moveAngle(0.3*joystick.value * 16/dt, joystick.angle);
 		};
 		
 		player.on('update', handler);
@@ -236,7 +246,8 @@ Scene.create('main', function() {
 		cvs.on('resize', resizeHandler);
 		
 		
-		rootNode.ready();
+		root.ready();
+		// rootNode.ready();
 		
 		console.log('inited');
 	};
@@ -255,11 +266,13 @@ Scene.create('main', function() {
 	
 	//	rootNode.getChild('Player/Sprite').rotation += 0.01;
 	//	handler(dt);
-		rootNode.update(dt);
+	
+		root.update(dt);
+		// rootNode.update(dt);
 		player._prevPos.set(player.pos);
 		
 		
-		main.camera.moveTime(player.globalPos.minus(screenSize.buf().div(2)), 5);
+		main.camera.moveTime(player.getChild('Sprite').globalPos.minus(screenSize.buf().div(2)), 5);
 		//==================================================//
 
 
@@ -269,7 +282,8 @@ Scene.create('main', function() {
 		
 		netmap.draw(main);
 		
-		rootNode.render(main);
+		root.render(main);
+		// rootNode.render(main);
 		
 		
 		joystick.draw(main.ctx);

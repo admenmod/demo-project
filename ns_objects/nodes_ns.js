@@ -51,7 +51,6 @@ let nodes_ns = new function() {
 				console, Date, Math, JSON, Set, Map, WeakSet, WeakMap,
 				Object, Array, Function, Number, String, RegExp, BigInt, Symbol
 			};
-			this.ii = 0;
 		}
 		
 		get NODE_TYPE() { return this.__proto__[Symbol.toStringTag]; }
@@ -75,15 +74,10 @@ let nodes_ns = new function() {
 		
 		get globalPos() { return this.globalPosition; }
 		get globalPosition() { return this._getRelativePosition(Child.MAX_CHILDREN); }
-	//	set globalPosition(v) {
-		//	let g = this.getParent().globalPosition;
-		//	let s = this.getParent().scale;
-			
-		//	let diff = v.buf().sub(this.globalPos);
-		//	this.pos.add(diff);
-		//	if(v.x !== null) this.pos.x = (v.x-g.x)/s.x;
-		//	if(v.y !== null) this.pos.y = (v.y-g.y)/s.y;
-	//	}
+		set globalPosition(v) {
+			if(this.getParent()) this.pos.set(v.sub(this.getParent().globalPosition).div(this.getParent().scale));
+			else this.pos.set(v);
+		}
 		
 		get globalIsRenderDebug() { return this._getRelativeIsRenderDebug(Child.MAX_CHILDREN); }
 		
@@ -123,18 +117,18 @@ let nodes_ns = new function() {
 			
 			let prev = this, next = null;
 			
-			if(!arr.length) acc.add(this.position.buf());
+			if(!arr.length) acc.add(this.position);
 			
 			for(let i = 0; i < l; i++) {
 				next = arr[i];
 				
-				let v = prev.position.buf();
-				acc.add(v).inc(next.scale);
+				acc.add(prev.position).inc(next.scale);
 				if(next.rotation !== 0) acc.angle = next.rotation;
 				
 				prev = next;
 			};
-		//	if(arr.length) acc.add(arr[arr.length-1]);
+			
+			if(arr.length) acc.add(arr[arr.length-1].position);
 			
 			return acc;
 		}
@@ -307,6 +301,7 @@ let nodes_ns = new function() {
 		}
 	};
 	Sprite.prototype[Symbol.toStringTag] = 'Sprite';
+	//======================================================================//
 	
 	
 	let CollisionObject = this.CollisionObject = class extends Spatial {
@@ -354,8 +349,8 @@ let nodes_ns = new function() {
 		getBoundingRect(pos = this.globalPosition) {
 			let size = this.globalSize;
 			return {
-				x: pos.x - size.x/2, w: size.x, width: size.x,
-				y: pos.y - size.y/2, h: size.y, height: size.y,
+				x: pos.x, w: size.x, width: size.x,
+				y: pos.y, h: size.y, height: size.y,
 				
 				left:	pos.x - size.x/2,
 				right:	pos.x + size.x/2,
@@ -367,14 +362,18 @@ let nodes_ns = new function() {
 		isStaticRectIntersect(b) {
 			let a = this.getBoundingRect();
 			b = b.getBoundingRect?.() || b;
+			
+			let s = vec2(a.w, a.h).add(b.w, b.h).div(2);
+			
 		//	return !(a.right < b.left || b.right < a.left || a.bottom < b.top || b.bottom < a.top);
-			return !(a.x < b.x-a.w || a.x > b.x+b.w || a.y < b.y-a.h || a.y > b.y+b.h);
+		//	return !(a.x < b.x-a.w || a.x > b.x+b.w || a.y < b.y-a.h || a.y > b.y+b.h);
+			return !(a.x < b.x-s.x || a.x > b.x+s.x || a.y < b.y-s.y || a.y > b.y+s.y);
 		}
 		
 		isDynamicRectIntersect(b) {
 			let v = false;
 			let a = this.getDynamicCollisionBox();
-		//	b = b.getDynamicCollisionBox();
+			b = b.getDynamicCollisionBox();
 			
 			for(let i = 0; i < a.length; i++) {
 				if(v = isPointRectIntersect(a[i], b)) break;
@@ -401,7 +400,9 @@ let nodes_ns = new function() {
 		//	ctx.closePath();
 		//	ctx.fill();
 		//	ctx.stroke();
-			ctx.fillRect(b.left, b.top, b.w, b.h);
+			ctx.fillRect(b.left, b.top, b.right-b.left, b.bottom-b.top);
+		//	ctx.fillRect(b.x, b.y, b.w, b.h);
+		//	ctx.fillRect(b.left, b.top, b.w, b.h);
 			ctx.strokeRect(b.left, b.top, b.w, b.h);
 			
 			super.renderDebug(ctx);
@@ -418,6 +419,7 @@ let nodes_ns = new function() {
 			this._prevPos = this.pos.buf();
 			
 			this._velocity = vec2(); // motion
+			this._rebound = vec2();
 			this._velocityRotation = 0;
 			
 			this.resist = p.resist||0.9;
@@ -439,27 +441,38 @@ let nodes_ns = new function() {
 		collisionUpdateTo(obj) { // todo: finalize
 			if(this.type_physics === 'static') return;
 			
-			let a = this.getBoundingRect(this._prevPos), b = obj.getBoundingRect();
+			let a = this.getBoundingRect(this._prevPos);
+			let b = obj.getBoundingRect();
 			
 			let t = this.isStaticRectIntersect(b);
-			if(!t) return false;
+			if(!t) {
+				this.getChild('Sprite').image = db.car;
+				return false;
+			}
+			this.getChild('Sprite').image = db.player;
 			
+			
+			let cc = 0;
 			let c = 1;
-			if(a.x < b.x-a.w) {
-				this.pos.x = b.x-a.w + a.w/2 - c;
-				this.vel.x = 0;
+			let s = vec2(a.w, a.h).add(b.w, b.h).div(2);
+		//	let s = this.globalSize.add(obj.globalSize).div(2); //.div(this.getRootNode().scale);
+			let gg = this.globalPosition;
+			
+			if(a.x > b.x+s.x+cc) {
+				this.globalPosition = vec2(b.x+s.x+c, gg.y);
+				this.vel.x = this._rebound.x;
 			};
-			if(a.x > b.x+b.w) {
-				this.pos.x = b.x+b.w + a.w/2 + c;
-				this.vel.x = 0;
+			if(a.x < b.x-s.x-cc) {
+				this.globalPosition = vec2(b.x-s.x-c, gg.y);
+				this.vel.x = -this._rebound.x;
 			};
-			if(a.y < b.y-a.h) {
-				this.pos.y = b.y-a.h + a.h/2 - c;
-				this.vel.y = 0;
+			if(a.y > b.y+s.y+cc) {
+				this.globalPosition = vec2(gg.x, b.y+s.y+c);
+				this.vel.y = this._rebound.y;
 			};
-			if(a.y > b.y+b.h) {
-				this.pos.y = b.y+b.h + a.h/2 + c;
-				this.vel.y = 0;
+			if(a.y < b.y-s.y-cc) {
+				this.globalPosition = vec2(gg.x, b.y-s.y-c);
+				this.vel.y = -this._rebound.y;
 			};
 			
 			return t;

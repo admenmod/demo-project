@@ -1,17 +1,8 @@
-(function() {
-	let ver = {};
-	
-	function codeShell(code = '', useAPI = {}, file = 'code') {
-		let proxyUseAPI = new Proxy(useAPI, {
-			has: t => true,
-			get: (target, key) => key === Symbol.unscopables ? undefined : target[key]
-		});
-		
-		if(typeof code !== 'string') code = code.toString().replace(/^function.+?\{(.*)\}$/s, '$1');
-		return function() { eval(`with(proxyUseAPI) {${code}}; //# sourceURL=${file}`); };
-	};
-	
+globalThis.Ver = globalThis.ver = {};
+
+(function(ver) {
 	'use strict';
+	
 	// helpers
 	let u = a => a !== undefined;
 	let setConstantProperty = (o, p, v) => Object.defineProperty(o, p, { value: v, enumerable: true });
@@ -26,9 +17,28 @@
 	let random = (a, b) =>  Math.floor(Math.random()*(1+b-a)+a);
 	let JSONcopy = data => JSON.parse(JSON.stringify(data));
 	
+	
+	let createPrivileges = (privileges = {}) => {
+		let register = {
+			present: {},
+			default: privileges
+		};
+		
+		for(let i in register.default) register.present[i] = register.default[i];
+		
+		register.addPrivilege = (cb, privileges = {}) => function() {
+			for(let i in privileges) i in register.present && (register.present[i] = privileges[i]);
+			cb.apply(this, arguments);
+			for(let i in privileges) i in register.present && (register.present[i] = register.default[i]);
+		};
+		
+		return register;
+	};
+	
+	
 	let generateImage = (w, h, cb) => new Promise((res, rej) => {
 		let cvs = generateImage.canvas || (generateImage.canvas = document.createElement('canvas'));
-		ctx = cvs.getContext('2d');
+		let ctx = cvs.getContext('2d');
 		cvs.width = w; cvs.height = h;
 		
 		cb(ctx, vec2(w, h));
@@ -77,7 +87,7 @@
 				Object.defineProperty(this._events[type], 'store', { value: {} });
 				Object.defineProperty(this._events[type], 'once', { value: [] });
 				
-					let store = this._events[type].store;
+				let store = this._events[type].store;
 				store.type = type;
 				store.self = store.emitter = this;
 			};
@@ -247,11 +257,12 @@
 			this._children.push(node);
 			
 			node.emit('append_node', node, this, root);
-			this.emit('append_node', node, this, root);
-			root.emit('append_node', node, this, root);
-			
 			node.emit('append_node:node', node, this, root);
+			
+			this.emit('append_node', node, this, root);
 			this.emit('append_node:this', node, this, root);
+			
+			root.emit('append_node', node, this, root);
 			root.emit('append_node:root', node, this, root);
 			
 			return node;
@@ -265,11 +276,12 @@
 			this._children.splice(l, 1)[0]._parent = null;
 			
 			node.emit('remove_node', node, this, root);
-			this.emit('remove_node', node, this, root);
-			root.emit('remove_node', node, this, root);
-			
 			node.emit('remove_node:node', node, this, root);
+			
+			this.emit('remove_node', node, this, root);
 			this.emit('remove_node:this', node, this, root);
+			
+			root.emit('remove_node', node, this, root);
 			root.emit('remove_node:root', node, this, root);
 			
 			return node;
@@ -359,37 +371,43 @@
 	
 	
 	class Vector2 {
-		constructor(x, y) {
-			this.x = +x||0;
-			this.y = +y||(u(y) ? +y : +x||0);
+		constructor(x = 0, y = 0) {
+			this.x = this.y = 0;
+			this.set(x, y);
 		}
 		add(x, y) {
 			if(u(x.x) && u(x.y)) { this.x += x.x; this.y += x.y; }
+			else if(u(x[0]) && u(x[1])) { this.x += x[0]; this.y += x[1]; }
 			else { this.x += x||0; this.y += u(y) ? y : x||0; };
 			return this;
 		}
 		sub(x, y) {
 			if(u(x.x) && u(x.y)) { this.x -= x.x; this.y -= x.y; }
+			else if(u(x[0]) && u(x[1])) { this.x -= x[0]; this.y -= x[1]; }
 			else { this.x -= x||0; this.y -= u(y) ? y : x||0; };
 			return this;
 		}
 		inc(x, y) {
 			if(u(x.x) && u(x.y)) { this.x *= x.x; this.y *= x.y; }
+			else if(u(x[0]) && u(x[1])) { this.x *= x[0]; this.y *= x[1]; }
 			else { this.x *= x||0; this.y *= u(y) ? y : x||0; };
 			return this;
 		}
 		div(x, y) {
 			if(u(x.x) && u(x.y)) { this.x /= x.x; this.y /= x.y; }
+			else if(u(x[0]) && u(x[1])) { this.x /= x[0]; this.y /= x[1]; }
 			else { this.x /= x||0; this.y /= u(y) ? y : x||0; };
 			return this;
 		}
 		pow(x, y) {
 			if(u(x.x) && u(x.y)) { this.x **= x.x; this.y **= x.y; }
+			else if(u(x[0]) && u(x[1])) { this.x **= x[0]; this.y **= x[1]; }
 			else { this.x **= x||0; this.y **= u(y) ? y : x||0; };
 			return this;
 		}
 		mod(x, y) {
 			if(u(x.x) && u(x.y)) { this.x %= x.x; this.y %= x.y; }
+			else if(u(x[0]) && u(x[1])) { this.x %= x[0]; this.y %= x[1]; }
 			else { this.x %= x||0; this.y %= u(y) ? y : x||0; };
 			return this;
 		}
@@ -410,10 +428,11 @@
 		}
 		set(x, y) {
 			if(u(x.x) && u(x.y)) { this.x = x.x; this.y = x.y; }
+			else if(u(x[0]) && u(x[1])) { this.x = x[0]; this.y = x[1]; }
 			else { this.x = x||0; this.y = u(y) ? y : x||0; };
 			return this;
 		}
-		buf(x, y) { return new Vector2(u(x)||this.x, u(y)||this.y); }
+		buf(x, y) { return new Vector2(u(x) || this.x, u(y) || this.y); }
 		getDistance(v) { return Math.sqrt((v.x-this.x) ** 2 + (v.y-this.y) ** 2); }
 		
 		moveAngle(mv = 0, a = 0) {
@@ -574,7 +593,7 @@
 		quadraticCurveTo(x1, y1, x, y) { return this.ctx.quadraticCurveTo(x1-this.camera.x, y1-this.camera.y, x-this.camera.x, y-this.camera.y); }
 		bezierCurveTo(x1, y1, x2, y2, x, y) { return this.ctx.bezierCurveTo(x1-this.camera.x, y1-this.camera.y, x2-this.camera.x, y2-this.camera.y, x-this.camera.x, y-this.camera.y); }
 		arcTo(x1, y1, x2, y2, r) { return this.ctx.arcTo(x1-this.camera.x, y1-this.camera.y, x2-this.camera.x, y2-this.camera.y, r); }
-		rect(x, y, w, h) { return this.ctx.rect(x-this.camera.x, y-this.camera.y); }
+		rect(x, y, w, h) { return this.ctx.rect(x-this.camera.x, y-this.camera.y, w, h); }
 		arc(x, y, r, n, m, t) { return this.ctx.arc(x-this.camera.x, y-this.camera, r, n, m, t); }
 		ellipse(x, y, w, h, n, m, t) { return this.ctx.ellipse(x-this.camera.x, y - this.camera.y, w, h, n, m, t); }
 	};
@@ -672,14 +691,31 @@
 	//======================================================================//
 	
 	
-	ver = {
-		version: '1.1.1',
+	Object.assign(ver, {
+		version: '1.2.0',
 		
-		codeShell, random, JSONcopy, loader, loadImage, loadScript, generateImage,
+		createPrivileges, random, JSONcopy,
+		loader, loadImage, loadScript, generateImage,
 		EventEmitter, Scene, Child,
 		Vector2, vec2, VectorN, vecN,
 		CameraImitationCanvas, CanvasLayer
+	});
+})(globalThis.ver);
+
+
+(function(ver) {
+	function codeShell(code = '', useAPI = {}, p = {}) {
+		let API = useAPI;
+		if(p.insulatedShell ?? true) {
+			API = new Proxy(useAPI, {
+				has: () => true,
+				get: (target, key) => key === Symbol.unscopables ? undefined : target[key]
+			});
+		};
+		
+		if(typeof code !== 'string') code = code.toString().replace(/^function.+?\{(.*)\}$/s, '$1');
+		return function() { eval(`with(API) {${code}}; //# sourceURL=${p.file || 'code'}`); };
 	};
 	
-	globalThis.Ver = globalThis.ver = ver;
-})();
+	ver.codeShell = codeShell;
+})(globalThis.ver);
